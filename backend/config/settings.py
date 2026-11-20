@@ -166,6 +166,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "COERCE_DECIMAL_TO_STRING": True,
+    "EXCEPTION_HANDLER": "accounts.exceptions.custom_exception_handler",
 }
 
 SIMPLE_JWT = {
