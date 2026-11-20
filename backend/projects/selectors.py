@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from .models import Project, Task
 
 
@@ -44,3 +46,27 @@ def get_task_tree(project_id):
         task._children = by_parent.get(task.id, [])
 
     return by_parent.get(None, [])
+
+
+def calculate_progress(roots):
+    """
+    Progress = sum of effective weights of completed leaf tasks.
+
+    Effective weight:
+      - root task:  its own weight
+      - child task: parent effective weight × own weight / 100
+
+    Only leaf tasks (no children) count toward progress.
+    Parent tasks are complete when all their children are complete — not counted directly.
+    """
+    def _walk(tasks, parent_effective=Decimal("100.00")):
+        total = Decimal("0.00")
+        for task in tasks:
+            effective = parent_effective * task.weight / Decimal("100.00")
+            if task._children:
+                total += _walk(task._children, effective)
+            elif task.is_completed:
+                total += effective
+        return total
+
+    return _walk(roots)
