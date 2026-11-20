@@ -1,3 +1,15 @@
-from django.shortcuts import render
+from rest_framework import generics
+from rest_framework_simplejwt.views import TokenRefreshView
 
-# Create your views here.
+from .serializers import ActiveUserTokenRefreshSerializer, UserSerializer
+
+
+class ActiveUserTokenRefreshView(TokenRefreshView):
+    serializer_class = ActiveUserTokenRefreshSerializer
+
+
+class MeView(generics.RetrieveAPIView):
+    serializer_class = UserSerializer
+
+    def get_object(self):
+        return self.request.user
