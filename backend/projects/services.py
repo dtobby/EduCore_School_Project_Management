@@ -102,6 +102,30 @@ def publish_project(project_id, user, version):
     return project
 
 
+def _check_all_leaves_complete(project_id):
+    """Raise PreconditionError if any leaf task is not completed. FR-09."""
+    roots = get_task_tree(project_id)
+    if not roots:
+        return  # no tasks — handled by publish preconditions already
+
+    incomplete = []
+
+    def _walk(tasks):
+        for task in tasks:
+            if task._children:
+                _walk(task._children)
+            elif not task.is_completed:
+                incomplete.append(task.title)
+
+    _walk(roots)
+
+    if incomplete:
+        n = len(incomplete)
+        raise PreconditionError(
+            f"{n} leaf task{'s' if n > 1 else ''} must be completed before submitting."
+        )
+
+
 @transaction.atomic
 def submit_project(project_id, user, version):
     """IN_PROGRESS → SUBMITTED.  Called by an assigned student."""
@@ -112,6 +136,8 @@ def submit_project(project_id, user, version):
         raise ValidationError(
             f"Cannot submit a project with status '{project.status}'."
         )
+
+    _check_all_leaves_complete(project.id)
 
     from_status = project.status
     now = timezone.now()
@@ -215,6 +241,41 @@ def validate_task_depth(parent_task):
         raise ValidationError(
             f"Maximum task depth ({Task.MAX_DEPTH}) exceeded."
         )
+
+
+@transaction.atomic
+def toggle_task_completion(project_id, task_id, user, is_completed, version):
+    """
+    Mark a leaf task complete or incomplete.  FR-10.
+    Locks the project row so a concurrent submit cannot see a half-toggled state.
+    """
+    project = _acquire(project_id)
+    _check_version(project, version)
+
+    if project.status != Project.Status.IN_PROGRESS:
+        raise ValidationError("Task completion only allowed on IN_PROGRESS projects.")
+
+    try:
+        task = Task.objects.get(id=task_id, project=project)
+    except Task.DoesNotExist:
+        raise ValidationError("Task not found.")
+
+    if task.children.exists():
+        raise ValidationError("Only leaf tasks (no subtasks) can be marked complete.")
+
+    task.is_completed = is_completed
+    if is_completed:
+        task.completed_by = user
+        task.completed_at = timezone.now()
+    else:
+        task.completed_by = None
+        task.completed_at = None
+    task.save(update_fields=["is_completed", "completed_by", "completed_at"])
+
+    project.version += 1
+    project.save(update_fields=["version", "updated_at"])
+
+    return task
 
 
 @transaction.atomic

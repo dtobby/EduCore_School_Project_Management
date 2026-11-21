@@ -175,6 +175,7 @@ class TestSubmit:
     def test_assigned_student_can_submit(self, client, teacher_user, student_user, student_token):
         project = make_project(teacher_user, status=Project.Status.IN_PROGRESS)
         project.assigned_students.add(student_user)
+        # No tasks → no incomplete leaves → passes FR-09 by vacuous truth
         res = client.post(
             f"/api/projects/{project.id}/submit/",
             {"version": 1},
@@ -184,6 +185,41 @@ class TestSubmit:
         assert res.status_code == 200
         assert res.data["status"] == "SUBMITTED"
         assert res.data["version"] == 2
+
+    def test_cannot_submit_with_incomplete_leaf_task(
+        self, client, teacher_user, student_user, student_token
+    ):
+        """FR-09: student cannot submit while any leaf task is incomplete."""
+        project = make_project(teacher_user, status=Project.Status.IN_PROGRESS)
+        project.assigned_students.add(student_user)
+        Task.objects.create(project=project, title="Incomplete task", weight="100.00")
+        res = client.post(
+            f"/api/projects/{project.id}/submit/",
+            {"version": 1},
+            content_type="application/json",
+            **auth(student_token),
+        )
+        assert res.status_code == 400
+        assert res.data["code"] == "precondition_failed"
+
+    def test_can_submit_when_all_leaf_tasks_complete(
+        self, client, teacher_user, student_user, student_token
+    ):
+        """FR-09: when all leaves are done, submit succeeds."""
+        project = make_project(teacher_user, status=Project.Status.IN_PROGRESS)
+        project.assigned_students.add(student_user)
+        Task.objects.create(
+            project=project, title="Done leaf", weight="100.00",
+            is_completed=True, completed_by=student_user, completed_at=timezone.now(),
+        )
+        res = client.post(
+            f"/api/projects/{project.id}/submit/",
+            {"version": 1},
+            content_type="application/json",
+            **auth(student_token),
+        )
+        assert res.status_code == 200
+        assert res.data["status"] == "SUBMITTED"
 
     def test_submit_records_submitted_at_and_submitted_by(
         self, client, teacher_user, student_user, student_token
@@ -454,7 +490,7 @@ class TestFullFlow:
     def test_full_draft_to_graded_flow(
         self, client, teacher_user, student_user, teacher_token, student_token
     ):
-        """Happy path: DRAFT → IN_PROGRESS → SUBMITTED → GRADED."""
+        """Happy path: DRAFT → IN_PROGRESS → task complete → SUBMITTED → GRADED."""
         project = make_publishable_project(teacher_user, student_user)
 
         # Teacher publishes
@@ -467,25 +503,35 @@ class TestFullFlow:
         assert res.data["status"] == "IN_PROGRESS"
         assert res.data["version"] == 2
 
+        # Student completes the leaf task (FR-09 — required before submit)
+        task = Task.objects.filter(project=project).first()
+        res = client.post(
+            f"/api/projects/{project.id}/tasks/{task.id}/toggle/",
+            {"is_completed": True, "version": 2},
+            content_type="application/json",
+            **auth(student_token),
+        )
+        assert res.status_code == 200  # toggle increments project.version to 3
+
         # Student submits
         res = client.post(
             f"/api/projects/{project.id}/submit/",
-            {"version": 2},
+            {"version": 3},
             content_type="application/json",
             **auth(student_token),
         )
         assert res.data["status"] == "SUBMITTED"
-        assert res.data["version"] == 3
+        assert res.data["version"] == 4
 
         # Teacher grades
         res = client.post(
             f"/api/projects/{project.id}/grade/",
-            {"version": 3, "grade": "95.00", "feedback": "Outstanding."},
+            {"version": 4, "grade": "95.00", "feedback": "Outstanding."},
             content_type="application/json",
             **auth(teacher_token),
         )
         assert res.data["status"] == "GRADED"
-        assert res.data["version"] == 4
+        assert res.data["version"] == 5
         assert res.data["grade"] == "95.00"
 
         # Verify 3 log entries were created
