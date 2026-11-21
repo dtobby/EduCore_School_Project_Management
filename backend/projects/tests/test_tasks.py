@@ -335,7 +335,7 @@ class TestToggleCompletion:
         url = TOGGLE.format(project_id=project.id, task_id=task.id)
         res = client.post(
             url,
-            {"is_completed": True},
+            {"is_completed": True, "version": 1},
             content_type="application/json",
             **auth(student_token),
         )
@@ -344,6 +344,23 @@ class TestToggleCompletion:
         assert task.is_completed is True
         assert task.completed_by == student_user
         assert task.completed_at is not None
+
+    def test_toggle_increments_project_version(
+        self, client, teacher_user, student_user, student_token
+    ):
+        """FR-10: each toggle bumps project.version to prevent concurrent submit conflicts."""
+        project = make_project(teacher_user, status=Project.Status.IN_PROGRESS)
+        project.assigned_students.add(student_user)
+        task = make_task(project)
+        url = TOGGLE.format(project_id=project.id, task_id=task.id)
+        client.post(
+            url,
+            {"is_completed": True, "version": 1},
+            content_type="application/json",
+            **auth(student_token),
+        )
+        project.refresh_from_db()
+        assert project.version == 2
 
     def test_student_can_uncomplete_task(
         self, client, teacher_user, student_user, student_token
@@ -361,7 +378,7 @@ class TestToggleCompletion:
         url = TOGGLE.format(project_id=project.id, task_id=task.id)
         res = client.post(
             url,
-            {"is_completed": False},
+            {"is_completed": False, "version": 1},
             content_type="application/json",
             **auth(student_token),
         )
@@ -369,6 +386,25 @@ class TestToggleCompletion:
         task.refresh_from_db()
         assert task.is_completed is False
         assert task.completed_by is None
+
+    def test_stale_version_toggle_returns_409(
+        self, client, teacher_user, student_user, student_token
+    ):
+        """FR-10: stale version on toggle returns 409 stale_data."""
+        project = make_project(teacher_user, status=Project.Status.IN_PROGRESS)
+        project.assigned_students.add(student_user)
+        project.version = 5
+        project.save(update_fields=["version"])
+        task = make_task(project)
+        url = TOGGLE.format(project_id=project.id, task_id=task.id)
+        res = client.post(
+            url,
+            {"is_completed": True, "version": 1},
+            content_type="application/json",
+            **auth(student_token),
+        )
+        assert res.status_code == 409
+        assert res.data["code"] == "stale_data"
 
     def test_cannot_complete_non_leaf_task(
         self, client, teacher_user, student_user, student_token
@@ -380,7 +416,7 @@ class TestToggleCompletion:
         url = TOGGLE.format(project_id=project.id, task_id=root.id)
         res = client.post(
             url,
-            {"is_completed": True},
+            {"is_completed": True, "version": 1},
             content_type="application/json",
             **auth(student_token),
         )
@@ -395,7 +431,7 @@ class TestToggleCompletion:
         url = TOGGLE.format(project_id=project.id, task_id=task.id)
         res = client.post(
             url,
-            {"is_completed": True},
+            {"is_completed": True, "version": 1},
             content_type="application/json",
             **auth(student_token),
         )

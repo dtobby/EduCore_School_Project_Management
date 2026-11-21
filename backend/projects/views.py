@@ -37,6 +37,7 @@ from .services import (
     return_project,
     set_task_weights,
     submit_project,
+    toggle_task_completion,
     validate_task_depth,
 )
 
@@ -302,26 +303,16 @@ class TaskViewSet(viewsets.GenericViewSet):
 
     def toggle_completion(self, request, project_pk=None, pk=None):
         """POST /api/projects/{id}/tasks/{pk}/toggle/ — mark task complete/incomplete."""
-        project = self._get_project()
-        if project.status != Project.Status.IN_PROGRESS:
-            raise ValidationError("Task completion only allowed on IN_PROGRESS projects.")
-
-        task = get_object_or_404(Task, pk=pk, project=project)
-
-        if task.children.exists():
-            raise ValidationError("Only leaf tasks (no subtasks) can be marked complete.")
-
+        self._get_project()   # 404 if user can't see this project
         s = ToggleSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-
-        task.is_completed = s.validated_data["is_completed"]
-        if task.is_completed:
-            task.completed_by = request.user
-            task.completed_at = timezone.now()
-        else:
-            task.completed_by = None
-            task.completed_at = None
-        task.save(update_fields=["is_completed", "completed_by", "completed_at"])
+        task = toggle_task_completion(
+            project_id=project_pk,
+            task_id=pk,
+            user=request.user,
+            is_completed=s.validated_data["is_completed"],
+            version=s.validated_data["version"],
+        )
         return Response(TaskWriteSerializer(task).data)
 
 

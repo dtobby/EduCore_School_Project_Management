@@ -75,15 +75,15 @@ class ProjectDetailSerializer(ProjectSerializer):
             "submitted_by", "is_late", "graded_at",
         ]
 
+    def to_representation(self, instance):
+        self._roots = get_task_tree(instance.id)
+        return super().to_representation(instance)
+
     def get_tasks(self, obj):
-        roots = get_task_tree(obj.id)
-        return TaskSerializer(roots, many=True).data
+        return TaskSerializer(self._roots, many=True).data
 
     def get_progress(self, obj):
-        roots = get_task_tree(obj.id)
-        return str(calculate_progress(roots).quantize(
-            __import__("decimal").Decimal("0.01")
-        ))
+        return str(calculate_progress(self._roots).quantize(Decimal("0.01")))
 
 
 class AssignStudentsSerializer(serializers.Serializer):
@@ -164,3 +164,4 @@ class BulkWeightSerializer(serializers.Serializer):
 class ToggleSerializer(serializers.Serializer):
     """Input for POST /api/projects/{id}/tasks/{pk}/toggle/"""
     is_completed = serializers.BooleanField()
+    version = serializers.IntegerField(min_value=1)
