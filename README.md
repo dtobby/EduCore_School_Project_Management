@@ -1,7 +1,7 @@
 # EduCore — School Project Management & Task Hub
 
-A REST API for managing school projects, task trees, and student submissions.
-Built with Django 5 · Django REST Framework · SimpleJWT · PostgreSQL 16.
+A REST API + minimal Vue 3 frontend for managing school projects, task trees, and student submissions.
+Built with Django 5 · Django REST Framework · SimpleJWT · PostgreSQL 16 · Vue 3 + Vite + Pinia.
 
 ---
 
@@ -17,9 +17,13 @@ docker compose up --build
 That's it. On first boot the container:
 
 1. Runs all migrations automatically
-2. Seeds demo data (four users, four projects)
+2. Seeds demo data (users + projects in every status)
 
-**API explorer:** http://localhost:8000/api/docs/
+| URL | What |
+|-----|------|
+| http://localhost:5173 | Vue frontend (login + project list) |
+| http://localhost:8000/api/docs/ | Interactive API explorer (Swagger UI) |
+| http://localhost:8000/admin/ | Django admin panel |
 
 ---
 
@@ -46,7 +50,7 @@ That's it. On first boot the container:
 ## Running tests
 
 ```bash
-docker compose exec backend pytest          # all 125 tests
+docker compose exec backend pytest          # all 161 tests
 docker compose exec backend pytest -v       # verbose output
 docker compose exec backend pytest projects/tests/test_state_machine.py -v
 ```
@@ -55,14 +59,16 @@ docker compose exec backend pytest projects/tests/test_state_machine.py -v
 
 ## API overview
 
-| Group         | Endpoints                                                                                 |
-| ------------- | ----------------------------------------------------------------------------------------- |
-| Auth          | `POST /api/auth/token/` · `POST /api/auth/token/refresh/` · `GET /api/auth/me/`           |
-| Projects      | `GET/POST /api/projects/` · `GET/PATCH/DELETE /api/projects/{id}/`                        |
-| Assign        | `POST /api/projects/{id}/students/` · `DELETE /api/projects/{id}/students/{sid}/`         |
-| State machine | `publish` · `submit` · `grade` · `return` · `force-transition`                            |
+| Group         | Endpoints |
+| ------------- | --------- |
+| Auth          | `POST /api/auth/token/` · `POST /api/auth/token/refresh/` · `GET /api/auth/me/` |
+| Projects      | `GET/POST /api/projects/` · `GET/PATCH/DELETE /api/projects/{id}/` |
+| Assign        | `POST /api/projects/{id}/students/` · `DELETE /api/projects/{id}/students/{sid}/` |
+| State machine | `publish` · `submit` · `grade` · `return` · `force-transition` |
 | Tasks         | `GET/POST /api/projects/{id}/tasks/` · `GET/PATCH/DELETE /api/projects/{id}/tasks/{tid}/` |
-| Task actions  | `PUT /api/projects/{id}/tasks/weights/` · `POST /api/projects/{id}/tasks/{tid}/toggle/`   |
+| Task actions  | `PUT /api/projects/{id}/tasks/weights/` · `POST /api/projects/{id}/tasks/{tid}/toggle/` |
+| Schedule      | `GET /api/schedule/?from=&to=` |
+| Admin stats   | `GET /api/admin/stats/` |
 
 Full interactive docs at `/api/docs/`.
 
@@ -115,22 +121,15 @@ State machine transitions live in `projects/services.py` as plain Python functio
 
 ## Trade-offs and what was left out
 
-### What was deliberately omitted
-
-| Feature             | Why omitted                                                                                                                                          |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vue frontend        | The rubric grades API correctness, not UI. A minimal login + project list page would add no rubric weight and took ~6 hours of risk.                 |
-| File attachments    | Submission is a status transition, not a file upload. The SRS does not require attachments. Would add S3/R2 dependency and complexity.               |
-| Email notifications | No SMTP or background task runner (Celery) in scope. The state machine logs every transition, which is the durable record.                           |
+| Feature             | Why omitted |
+| ------------------- | ----------- |
+| File attachments    | Submission is a status transition, not a file upload. The SRS does not require attachments. Would add S3/R2 dependency and complexity. |
+| Email notifications | No SMTP or background task runner (Celery) in scope. The state machine logs every transition, which is the durable record. |
 | Soft-delete         | Users are deactivated (`is_active=False`), not deleted. All FKs use `PROTECT` so accidental deletion raises an error rather than cascading silently. |
 
-### What I would add with more time
+## What I would add with more time
 
-1. **Weight validation at publish** — verify sibling weights sum to 100.00 before allowing DRAFT→IN_PROGRESS. The service layer is already structured to add this check.
-2. **Schedule endpoint** — per-student task deadlines that the teacher can view in a calendar grid.
-3. **Admin stats** — project counts by status, top-performing students, overdue submissions.
-4. **Vue 3 frontend** — login page (Pinia store for JWT), project list with status filter, task tree with checkbox toggle.
-
-```
-
-```
+1. **Query count tests** — `assertNumQueries` assertions for the project list, detail, and schedule endpoints (NFR-01 requirement).
+2. **Concurrency test** — `TransactionTestCase` with two threads submitting simultaneously; assert one 200 and one 409.
+3. **Full teacher/student dashboards** — task tree editor with live weight totals, student submit flow with progress bar.
+4. **Token auto-refresh** — Axios interceptor that retries with a refreshed token on 401 before redirecting to login.

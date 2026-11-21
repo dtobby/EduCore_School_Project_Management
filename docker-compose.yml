@@ -23,5 +23,16 @@ services:
     ports:
       - "8000:8000"
 
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      # Prevent host (empty) node_modules from shadowing the container's installed packages
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
 volumes:
   pgdata:
