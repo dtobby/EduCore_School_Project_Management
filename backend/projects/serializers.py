@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
@@ -63,6 +65,7 @@ class ProjectDetailSerializer(ProjectSerializer):
 
     tasks = serializers.SerializerMethodField()
     assigned_students = UserBriefSerializer(many=True, read_only=True)
+    submitted_by = UserBriefSerializer(read_only=True)
     progress = serializers.SerializerMethodField()
 
     class Meta(ProjectSerializer.Meta):
@@ -89,3 +92,38 @@ class AssignStudentsSerializer(serializers.Serializer):
     student_ids = serializers.ListField(
         child=serializers.IntegerField(), allow_empty=False
     )
+
+
+# ── transition input serializers ──────────────────────────────────────────────
+
+class PublishSerializer(serializers.Serializer):
+    """Input for POST /api/projects/{id}/publish/"""
+    version = serializers.IntegerField(min_value=1)
+
+
+class SubmitSerializer(serializers.Serializer):
+    """Input for POST /api/projects/{id}/submit/"""
+    version = serializers.IntegerField(min_value=1)
+
+
+class GradeSerializer(serializers.Serializer):
+    """Input for POST /api/projects/{id}/grade/"""
+    version = serializers.IntegerField(min_value=1)
+    grade = serializers.DecimalField(
+        max_digits=5, decimal_places=2,
+        min_value=Decimal("0.00"), max_value=Decimal("100.00"),
+    )
+    feedback = serializers.CharField(min_length=1)
+
+
+class ReturnSerializer(serializers.Serializer):
+    """Input for POST /api/projects/{id}/return/"""
+    version = serializers.IntegerField(min_value=1)
+    feedback = serializers.CharField(min_length=1)
+
+
+class ForceTransitionSerializer(serializers.Serializer):
+    """Input for POST /api/projects/{id}/force-transition/"""
+    version = serializers.IntegerField(min_value=1)
+    to_status = serializers.ChoiceField(choices=Project.Status.choices)
+    reason = serializers.CharField(min_length=1)

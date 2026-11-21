@@ -8,12 +8,24 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Project
-from .permissions import IsProjectOwner, IsTeacher
+from .permissions import IsAdminRole, IsProjectOwner, IsStudent, IsTeacher
 from .selectors import get_projects_for_user
 from .serializers import (
     AssignStudentsSerializer,
+    ForceTransitionSerializer,
+    GradeSerializer,
     ProjectDetailSerializer,
     ProjectSerializer,
+    PublishSerializer,
+    ReturnSerializer,
+    SubmitSerializer,
+)
+from .services import (
+    force_transition,
+    grade_project,
+    publish_project,
+    return_project,
+    submit_project,
 )
 
 User = get_user_model()
@@ -53,9 +65,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "create":
             return [IsAuthenticated(), IsTeacher()]
-        if self.action in ["update", "partial_update", "destroy",
-                           "assign_students", "unassign_student"]:
+        if self.action in [
+            "update", "partial_update", "destroy",
+            "assign_students", "unassign_student",
+            "publish", "grade", "return_for_revision",
+        ]:
             return [IsAuthenticated(), IsTeacher(), IsProjectOwner()]
+        if self.action == "submit":
+            return [IsAuthenticated(), IsStudent()]
+        if self.action == "force_transition":
+            return [IsAuthenticated(), IsAdminRole()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -100,3 +119,53 @@ class ProjectViewSet(viewsets.ModelViewSet):
         student = get_object_or_404(User, id=student_id, role="STUDENT")
         project.assigned_students.remove(student)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # ── state machine transitions ─────────────────────────────────────────────
+
+    @action(detail=True, methods=["post"], url_path="publish")
+    def publish(self, request, pk=None):
+        """POST /api/projects/{id}/publish/ — DRAFT → IN_PROGRESS (teacher only)."""
+        self.get_object()   # permission + 404 check
+        s = PublishSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        project = publish_project(pk, request.user, s.validated_data["version"])
+        return Response(ProjectDetailSerializer(project).data)
+
+    @action(detail=True, methods=["post"], url_path="submit")
+    def submit(self, request, pk=None):
+        """POST /api/projects/{id}/submit/ — IN_PROGRESS → SUBMITTED (assigned student only)."""
+        self.get_object()   # permission + 404 check
+        s = SubmitSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        project = submit_project(pk, request.user, s.validated_data["version"])
+        return Response(ProjectDetailSerializer(project).data)
+
+    @action(detail=True, methods=["post"], url_path="grade")
+    def grade(self, request, pk=None):
+        """POST /api/projects/{id}/grade/ — SUBMITTED → GRADED (owning teacher only)."""
+        self.get_object()   # permission + 404 check
+        s = GradeSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        project = grade_project(pk, request.user, d["version"], d["grade"], d["feedback"])
+        return Response(ProjectDetailSerializer(project).data)
+
+    @action(detail=True, methods=["post"], url_path="return")
+    def return_for_revision(self, request, pk=None):
+        """POST /api/projects/{id}/return/ — SUBMITTED → IN_PROGRESS (owning teacher only)."""
+        self.get_object()   # permission + 404 check
+        s = ReturnSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        project = return_project(pk, request.user, d["version"], d["feedback"])
+        return Response(ProjectDetailSerializer(project).data)
+
+    @action(detail=True, methods=["post"], url_path="force-transition")
+    def force_transition(self, request, pk=None):
+        """POST /api/projects/{id}/force-transition/ — admin override, any → any."""
+        self.get_object()   # permission + 404 check
+        s = ForceTransitionSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        project = force_transition(pk, request.user, d["to_status"], d["reason"], d["version"])
+        return Response(ProjectDetailSerializer(project).data)
