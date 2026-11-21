@@ -8,7 +8,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from projects.models import Project, ProjectStatusLog
+from projects.models import Project, ProjectStatusLog, Task
 
 User = get_user_model()
 
@@ -24,6 +24,14 @@ def make_project(teacher, status=Project.Status.DRAFT, days=30):
     )
 
 
+def make_publishable_project(teacher, student):
+    """DRAFT project with one task (weight 100) and one assigned student — passes all publish checks."""
+    project = make_project(teacher)
+    Task.objects.create(project=project, title="Main task", weight="100.00")
+    project.assigned_students.add(student)
+    return project
+
+
 def auth(token):
     return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
@@ -32,8 +40,10 @@ def auth(token):
 
 @pytest.mark.django_db
 class TestPublish:
-    def test_teacher_can_publish_draft_project(self, client, teacher_user, teacher_token):
-        project = make_project(teacher_user)   # version=1, status=DRAFT
+    def test_teacher_can_publish_draft_project(
+        self, client, teacher_user, student_user, teacher_token
+    ):
+        project = make_publishable_project(teacher_user, student_user)
         res = client.post(
             f"/api/projects/{project.id}/publish/",
             {"version": 1},
@@ -44,8 +54,10 @@ class TestPublish:
         assert res.data["status"] == "IN_PROGRESS"
         assert res.data["version"] == 2   # incremented
 
-    def test_publish_creates_status_log(self, client, teacher_user, teacher_token):
-        project = make_project(teacher_user)
+    def test_publish_creates_status_log(
+        self, client, teacher_user, student_user, teacher_token
+    ):
+        project = make_publishable_project(teacher_user, student_user)
         client.post(
             f"/api/projects/{project.id}/publish/",
             {"version": 1},
@@ -57,6 +69,69 @@ class TestPublish:
         assert log.to_status == "IN_PROGRESS"
         assert log.changed_by == teacher_user
         assert log.is_forced is False
+
+    def test_cannot_publish_without_students(
+        self, client, teacher_user, teacher_token
+    ):
+        project = make_project(teacher_user)   # no students, no tasks
+        Task.objects.create(project=project, title="Task", weight="100.00")
+        res = client.post(
+            f"/api/projects/{project.id}/publish/",
+            {"version": 1},
+            content_type="application/json",
+            **auth(teacher_token),
+        )
+        assert res.status_code == 400
+        assert res.data["code"] == "precondition_failed"
+
+    def test_cannot_publish_without_tasks(
+        self, client, teacher_user, student_user, teacher_token
+    ):
+        project = make_project(teacher_user)   # no tasks
+        project.assigned_students.add(student_user)
+        res = client.post(
+            f"/api/projects/{project.id}/publish/",
+            {"version": 1},
+            content_type="application/json",
+            **auth(teacher_token),
+        )
+        assert res.status_code == 400
+        assert res.data["code"] == "precondition_failed"
+
+    def test_cannot_publish_with_uneven_root_weights(
+        self, client, teacher_user, student_user, teacher_token
+    ):
+        project = make_project(teacher_user)
+        project.assigned_students.add(student_user)
+        # 60 + 20 = 80, not 100
+        Task.objects.create(project=project, title="T1", weight="60.00")
+        Task.objects.create(project=project, title="T2", weight="20.00")
+        res = client.post(
+            f"/api/projects/{project.id}/publish/",
+            {"version": 1},
+            content_type="application/json",
+            **auth(teacher_token),
+        )
+        assert res.status_code == 400
+        assert res.data["code"] == "precondition_failed"
+
+    def test_cannot_publish_with_uneven_child_weights(
+        self, client, teacher_user, student_user, teacher_token
+    ):
+        project = make_project(teacher_user)
+        project.assigned_students.add(student_user)
+        root = Task.objects.create(project=project, title="Root", weight="100.00")
+        # children sum to 70, not 100
+        Task.objects.create(project=project, title="C1", weight="40.00", parent_task=root)
+        Task.objects.create(project=project, title="C2", weight="30.00", parent_task=root)
+        res = client.post(
+            f"/api/projects/{project.id}/publish/",
+            {"version": 1},
+            content_type="application/json",
+            **auth(teacher_token),
+        )
+        assert res.status_code == 400
+        assert res.data["code"] == "precondition_failed"
 
     def test_cannot_publish_non_draft_project(self, client, teacher_user, teacher_token):
         project = make_project(teacher_user, status=Project.Status.IN_PROGRESS)
@@ -380,8 +455,7 @@ class TestFullFlow:
         self, client, teacher_user, student_user, teacher_token, student_token
     ):
         """Happy path: DRAFT → IN_PROGRESS → SUBMITTED → GRADED."""
-        project = make_project(teacher_user)   # DRAFT, version=1
-        project.assigned_students.add(student_user)
+        project = make_publishable_project(teacher_user, student_user)
 
         # Teacher publishes
         res = client.post(

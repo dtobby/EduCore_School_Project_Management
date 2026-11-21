@@ -9,6 +9,13 @@ class StaleDataError(Exception):
     pass
 
 
+class PreconditionError(Exception):
+    """Raised when a state machine transition's preconditions are not met."""
+    def __init__(self, detail):
+        self.detail = detail
+        super().__init__(detail)
+
+
 def custom_exception_handler(exc, context):
     if isinstance(exc, StaleDataError):
         return Response(
@@ -18,6 +25,16 @@ def custom_exception_handler(exc, context):
                 "fields": {},
             },
             status=status.HTTP_409_CONFLICT,
+        )
+
+    if isinstance(exc, PreconditionError):
+        return Response(
+            {
+                "code": "precondition_failed",
+                "detail": exc.detail,
+                "fields": {},
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     response = exception_handler(exc, context)

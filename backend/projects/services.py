@@ -1,12 +1,49 @@
+from decimal import Decimal
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from accounts.exceptions import StaleDataError
+from accounts.exceptions import PreconditionError, StaleDataError
 from .models import Project, ProjectStatusLog, Task
+from .selectors import get_task_tree
 
 
 # ── private helpers ───────────────────────────────────────────────────────────
+
+def _validate_sibling_weights(tasks, errors):
+    """Each group of sibling tasks must sum to exactly 100.00."""
+    total = sum(t.weight for t in tasks)
+    if total != Decimal("100.00"):
+        titles = [t.title for t in tasks]
+        errors.append(
+            f"Tasks {titles} weights sum to {total:.2f}, must be exactly 100.00."
+        )
+    for task in tasks:
+        if task._children:
+            _validate_sibling_weights(task._children, errors)
+
+
+def _check_publish_preconditions(project):
+    """Raise PreconditionError if the project is not ready to publish."""
+    errors = []
+
+    if not project.assigned_students.exists():
+        errors.append("At least one student must be assigned before publishing.")
+
+    if project.deadline <= timezone.now():
+        errors.append("Project deadline must be in the future.")
+
+    roots = get_task_tree(project.id)
+    if not roots:
+        errors.append("At least one task must be added before publishing.")
+    else:
+        _validate_sibling_weights(roots, errors)
+
+    if errors:
+        raise PreconditionError(
+            detail=errors[0] if len(errors) == 1 else "; ".join(errors)
+        )
 
 def _acquire(project_id):
     """
@@ -54,6 +91,8 @@ def publish_project(project_id, user, version):
         raise ValidationError(
             f"Cannot publish a project with status '{project.status}'."
         )
+
+    _check_publish_preconditions(project)
 
     from_status = project.status
     project.status = Project.Status.IN_PROGRESS
