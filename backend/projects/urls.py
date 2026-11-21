@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import ProjectViewSet, TaskViewSet
+from .views import ProjectViewSet, ScheduleView, TaskViewSet
 
 router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
@@ -13,6 +13,7 @@ _task_toggle  = TaskViewSet.as_view({"post": "toggle_completion"})
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("schedule/", ScheduleView.as_view(), name="schedule"),
     path("projects/<int:project_pk>/tasks/", _task_list, name="project-task-list"),
     # weights/ before <int:pk>/ so it matches first (though <int:pk> won't match the string "weights")
     path("projects/<int:project_pk>/tasks/weights/", _task_weights, name="project-task-weights"),

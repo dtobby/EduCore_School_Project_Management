@@ -1,12 +1,16 @@
 import django_filters
+from datetime import datetime, timedelta
+
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import Project, Task
 from .permissions import IsAdminRole, IsProjectOwner, IsStudent, IsTeacher
@@ -318,3 +322,110 @@ class TaskViewSet(viewsets.GenericViewSet):
             task.completed_at = None
         task.save(update_fields=["is_completed", "completed_by", "completed_at"])
         return Response(TaskWriteSerializer(task).data)
+
+
+# ── Schedule ──────────────────────────────────────────────────────────────────
+
+class ScheduleView(APIView):
+    """
+    GET /api/schedule/?from=&to=
+    Returns a flat, date-sorted list of upcoming events for the requesting user.
+    Default range: now → now + 30 days.
+
+    Student: IN_PROGRESS project deadlines + incomplete task due dates (assigned projects).
+    Teacher: project deadlines (in range) + ALL SUBMITTED projects (submission queue).
+    Admin:   empty list.
+
+    2 DB queries per role — no N+1.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        now = timezone.now()
+        from_dt = self._parse_dt(request.query_params.get("from"), now)
+        to_dt = self._parse_dt(request.query_params.get("to"), now + timedelta(days=30))
+
+        user = request.user
+        if user.role == "STUDENT":
+            events = self._student_events(user, from_dt, to_dt)
+        elif user.role == "TEACHER":
+            events = self._teacher_events(user, from_dt, to_dt)
+        else:
+            events = []
+
+        events.sort(key=lambda e: e["date"])
+        return Response(events)
+
+    @staticmethod
+    def _parse_dt(value, default):
+        if not value:
+            return default
+        # Try full datetime first (e.g. 2026-11-20T10:00:00), then date-only (2026-11-20)
+        dt = parse_datetime(value)
+        if dt is None:
+            d = parse_date(value)
+            if d is not None:
+                dt = timezone.make_aware(datetime(d.year, d.month, d.day))
+        if dt is None:
+            raise ValidationError(f"Invalid date '{value}'. Use ISO 8601, e.g. 2026-11-20.")
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt)
+        return dt
+
+    @staticmethod
+    def _student_events(user, from_dt, to_dt):
+        events = []
+        # Query 1: IN_PROGRESS project deadlines assigned to this student
+        for p in Project.objects.filter(
+            assigned_students=user,
+            status=Project.Status.IN_PROGRESS,
+            deadline__range=(from_dt, to_dt),
+        ):
+            events.append({
+                "type": "deadline",
+                "date": p.deadline.isoformat(),
+                "project_id": p.id,
+                "title": p.title,
+            })
+        # Query 2: incomplete tasks with due_date in range (student's IN_PROGRESS projects)
+        for t in Task.objects.filter(
+            project__assigned_students=user,
+            project__status=Project.Status.IN_PROGRESS,
+            is_completed=False,
+            due_date__range=(from_dt, to_dt),
+        ):
+            events.append({
+                "type": "task_due",
+                "date": t.due_date.isoformat(),
+                "project_id": t.project_id,
+                "title": t.title,
+            })
+        return events
+
+    @staticmethod
+    def _teacher_events(user, from_dt, to_dt):
+        events = []
+        # Query 1: deadlines of the teacher's own projects in range
+        for p in Project.objects.filter(
+            created_by=user,
+            deadline__range=(from_dt, to_dt),
+        ):
+            events.append({
+                "type": "deadline",
+                "date": p.deadline.isoformat(),
+                "project_id": p.id,
+                "title": p.title,
+            })
+        # Query 2: submission queue — ALL submitted projects, not date-filtered
+        # They're a pending work inbox; filtering by date would hide old submissions.
+        for p in Project.objects.filter(
+            created_by=user,
+            status=Project.Status.SUBMITTED,
+        ).order_by("submitted_at"):
+            events.append({
+                "type": "submission",
+                "date": p.submitted_at.isoformat(),
+                "project_id": p.id,
+                "title": p.title,
+            })
+        return events
