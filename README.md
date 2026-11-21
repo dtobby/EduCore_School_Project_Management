@@ -29,28 +29,32 @@ That's it. On first boot the container:
 
 ## Demo credentials
 
-| Username   | Password     | Role    |
-| ---------- | ------------ | ------- |
-| `admin1`   | `admin123`   | ADMIN   |
-| `teacher1` | `teacher123` | TEACHER |
-| `student1` | `student123` | STUDENT |
-| `student2` | `student123` | STUDENT |
+| Username          | Password     | Role    |
+| ----------------- | ------------ | ------- |
+| `admin1`          | `admin123`   | ADMIN   |
+| `teacher1`        | `teacher123` | TEACHER |
+| `teacher2`        | `teacher123` | TEACHER |
+| `student1`        | `student123` | STUDENT |
+| `student2`        | `student123` | STUDENT |
+| `student3`–`student6` | `student123` | STUDENT |
 
 ### Seeded projects
 
-| Title                     | Status         | Assigned to        |
-| ------------------------- | -------------- | ------------------ |
-| [DEMO] Science Fair       | DRAFT          | —                  |
-| [DEMO] History Essay      | IN_PROGRESS    | student1, student2 |
-| [DEMO] Math Investigation | SUBMITTED      | student1, student2 |
-| [DEMO] Art Portfolio      | GRADED (88.50) | student2           |
+| Title                     | Status         | Creator  | Assigned to                      |
+| ------------------------- | -------------- | -------- | -------------------------------- |
+| [DEMO] Science Fair       | DRAFT          | teacher1 | —                                |
+| [DEMO] History Essay      | IN_PROGRESS    | teacher1 | student1, student2, student3, student4 |
+| [DEMO] Math Investigation | SUBMITTED      | teacher1 | student1, student2               |
+| [DEMO] Art Portfolio      | GRADED (88.50) | teacher2 | student2                         |
+
+Every project has a task tree at least 2 levels deep.
 
 ---
 
 ## Running tests
 
 ```bash
-docker compose exec backend pytest          # all 161 tests
+docker compose exec backend pytest          # all 173 tests
 docker compose exec backend pytest -v       # verbose output
 docker compose exec backend pytest projects/tests/test_state_machine.py -v
 ```
@@ -129,7 +133,6 @@ State machine transitions live in `projects/services.py` as plain Python functio
 
 ## What I would add with more time
 
-1. **Query count tests** — `assertNumQueries` assertions for the project list, detail, and schedule endpoints (NFR-01 requirement).
-2. **Concurrency test** — `TransactionTestCase` with two threads submitting simultaneously; assert one 200 and one 409.
-3. **Full teacher/student dashboards** — task tree editor with live weight totals, student submit flow with progress bar.
-4. **Token auto-refresh** — Axios interceptor that retries with a refreshed token on 401 before redirecting to login.
+1. **Full teacher/student dashboards** — task tree editor with live weight totals, student submit flow with progress bar.
+2. **Token auto-refresh** — Axios interceptor that retries with a refreshed token on 401 before redirecting to login.
+3. **Soft delete for projects** — currently only DRAFT projects can be deleted; archiving GRADED projects would be useful.

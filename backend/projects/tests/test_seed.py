@@ -29,29 +29,36 @@ def seeded_twice(db):
 
 @pytest.mark.django_db
 class TestSeedUsers:
-    def test_creates_all_four_users(self, seeded):
-        assert User.objects.count() == 4
+    def test_creates_all_nine_users(self, seeded):
+        """SRS §1: 1 admin, 2 teachers, 6 students."""
+        assert User.objects.count() == 9
 
     def test_creates_admin_with_correct_role(self, seeded):
         u = User.objects.get(username="admin1")
         assert u.role == "ADMIN"
         assert u.is_superuser is True
 
-    def test_creates_teacher_with_correct_role(self, seeded):
-        u = User.objects.get(username="teacher1")
-        assert u.role == "TEACHER"
+    def test_creates_two_teachers(self, seeded):
+        assert User.objects.filter(role="TEACHER").count() == 2
+        for name in ("teacher1", "teacher2"):
+            assert User.objects.filter(username=name, role="TEACHER").exists()
 
-    def test_creates_students_with_correct_role(self, seeded):
-        for name in ("student1", "student2"):
-            u = User.objects.get(username=name)
-            assert u.role == "STUDENT"
+    def test_creates_six_students(self, seeded):
+        assert User.objects.filter(role="STUDENT").count() == 6
+        for name in ("student1", "student2", "student3", "student4", "student5", "student6"):
+            assert User.objects.filter(username=name, role="STUDENT").exists()
 
     def test_passwords_are_usable(self, seeded):
         for username, password in [
-            ("admin1", "admin123"),
+            ("admin1",   "admin123"),
             ("teacher1", "teacher123"),
+            ("teacher2", "teacher123"),
             ("student1", "student123"),
             ("student2", "student123"),
+            ("student3", "student123"),
+            ("student4", "student123"),
+            ("student5", "student123"),
+            ("student6", "student123"),
         ]:
             user = User.objects.get(username=username)
             assert user.check_password(password), f"{username} password check failed"
@@ -79,7 +86,7 @@ class TestSeedProjects:
 
     def test_in_progress_project_has_students(self, seeded):
         p = Project.objects.get(status=Project.Status.IN_PROGRESS)
-        assert p.assigned_students.count() == 2
+        assert p.assigned_students.count() >= 2
 
     def test_submitted_project_has_submitted_by(self, seeded):
         p = Project.objects.get(status=Project.Status.SUBMITTED)
@@ -102,13 +109,28 @@ class TestSeedTasks:
         for p in Project.objects.all():
             assert p.tasks.count() >= 1, f"{p.title} has no tasks"
 
+    def test_every_project_has_at_least_two_levels(self, seeded):
+        """SRS §1: task tree at least 2 levels deep for every project."""
+        for p in Project.objects.all():
+            has_child = p.tasks.filter(parent_task__isnull=False).exists()
+            assert has_child, f"{p.title} has no child tasks (only 1 level deep)"
+
     def test_in_progress_project_has_nested_tasks(self, seeded):
         p = Project.objects.get(status=Project.Status.IN_PROGRESS)
         root = p.tasks.get(parent_task__isnull=True)
         assert p.tasks.filter(parent_task=root).count() == 2
 
+    def test_draft_project_has_nested_tasks(self, seeded):
+        p = Project.objects.get(status=Project.Status.DRAFT)
+        parent = p.tasks.filter(parent_task__isnull=True).first()
+        assert p.tasks.filter(parent_task=parent).count() == 2
+
     def test_graded_project_all_tasks_completed(self, seeded):
         p = Project.objects.get(status=Project.Status.GRADED)
+        assert p.tasks.filter(is_completed=False).count() == 0
+
+    def test_submitted_project_all_tasks_completed(self, seeded):
+        p = Project.objects.get(status=Project.Status.SUBMITTED)
         assert p.tasks.filter(is_completed=False).count() == 0
 
 
@@ -130,7 +152,7 @@ class TestSeedStatusLogs:
 @pytest.mark.django_db
 class TestSeedIdempotency:
     def test_running_twice_does_not_duplicate_users(self, seeded_twice):
-        assert User.objects.count() == 4
+        assert User.objects.count() == 9
 
     def test_running_twice_does_not_duplicate_projects(self, seeded_twice):
         assert Project.objects.count() == 4
