@@ -2,6 +2,6 @@
 set -e
 
 python manage.py migrate --noinput
-# python manage.py seed_school_data 
+python manage.py seed_school_data
 
 exec "$@"
