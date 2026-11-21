@@ -1,17 +1,19 @@
 import django_filters
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Project
+from .models import Project, Task
 from .permissions import IsAdminRole, IsProjectOwner, IsStudent, IsTeacher
-from .selectors import get_projects_for_user
+from .selectors import get_projects_for_user, get_task_tree
 from .serializers import (
     AssignStudentsSerializer,
+    BulkWeightSerializer,
     ForceTransitionSerializer,
     GradeSerializer,
     ProjectDetailSerializer,
@@ -19,13 +21,18 @@ from .serializers import (
     PublishSerializer,
     ReturnSerializer,
     SubmitSerializer,
+    TaskSerializer,
+    TaskWriteSerializer,
+    ToggleSerializer,
 )
 from .services import (
     force_transition,
     grade_project,
     publish_project,
     return_project,
+    set_task_weights,
     submit_project,
+    validate_task_depth,
 )
 
 User = get_user_model()
@@ -169,3 +176,145 @@ class ProjectViewSet(viewsets.ModelViewSet):
         d = s.validated_data
         project = force_transition(pk, request.user, d["to_status"], d["reason"], d["version"])
         return Response(ProjectDetailSerializer(project).data)
+
+
+# ── Task CRUD ─────────────────────────────────────────────────────────────────
+
+class TaskViewSet(viewsets.GenericViewSet):
+    """
+    Nested under projects: /api/projects/{project_pk}/tasks/
+    Uses project scoping — the user can only reach tasks of projects they can see.
+    """
+
+    def _get_project(self):
+        """
+        Fetch the parent project, applying the same user-scoped queryset as
+        ProjectViewSet.  A student can't reach tasks of an unassigned project.
+        """
+        return get_object_or_404(
+            get_projects_for_user(self.request.user),
+            pk=self.kwargs["project_pk"],
+        )
+
+    def get_queryset(self):
+        return Task.objects.filter(project__pk=self.kwargs["project_pk"])
+
+    def get_permissions(self):
+        if self.action in ["create", "partial_update", "destroy", "bulk_weights"]:
+            return [IsAuthenticated(), IsTeacher()]
+        return [IsAuthenticated()]
+
+    # ── list (returns tree, not flat queryset) ────────────────────────────────
+
+    def list(self, request, project_pk=None):
+        """GET /api/projects/{id}/tasks/ — returns nested task tree."""
+        project = self._get_project()
+        roots = get_task_tree(project.id)
+        return Response(TaskSerializer(roots, many=True).data)
+
+    # ── create ────────────────────────────────────────────────────────────────
+
+    def create(self, request, project_pk=None):
+        """POST /api/projects/{id}/tasks/ — teacher only, project must be DRAFT."""
+        project = self._get_project()
+        if project.status != Project.Status.DRAFT:
+            raise ValidationError("Tasks can only be added to DRAFT projects.")
+        # Check the teacher owns this project
+        if project.created_by != request.user:
+            raise ValidationError("You do not own this project.")
+
+        s = TaskWriteSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        parent_task = s.validated_data.get("parent_task")
+        if parent_task:
+            if parent_task.project_id != project.id:
+                raise ValidationError("Parent task must belong to the same project.")
+            validate_task_depth(parent_task)
+
+        task = s.save(project=project)
+        return Response(TaskWriteSerializer(task).data, status=status.HTTP_201_CREATED)
+
+    # ── retrieve ──────────────────────────────────────────────────────────────
+
+    def retrieve(self, request, project_pk=None, pk=None):
+        """GET /api/projects/{id}/tasks/{pk}/ — flat task (no nested children)."""
+        self._get_project()   # 404 if user can't see the project
+        task = get_object_or_404(Task, pk=pk, project__pk=project_pk)
+        return Response(TaskWriteSerializer(task).data)
+
+    # ── partial_update ────────────────────────────────────────────────────────
+
+    def partial_update(self, request, project_pk=None, pk=None):
+        """PATCH /api/projects/{id}/tasks/{pk}/ — teacher only, project must be DRAFT."""
+        project = self._get_project()
+        if project.status != Project.Status.DRAFT:
+            raise ValidationError("Tasks can only be edited on DRAFT projects.")
+        if project.created_by != request.user:
+            raise ValidationError("You do not own this project.")
+
+        task = get_object_or_404(Task, pk=pk, project=project)
+        s = TaskWriteSerializer(task, data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+
+        parent_task = s.validated_data.get("parent_task")
+        if parent_task:
+            if parent_task.project_id != project.id:
+                raise ValidationError("Parent task must belong to the same project.")
+            if parent_task.pk == task.pk:
+                raise ValidationError("A task cannot be its own parent.")
+            validate_task_depth(parent_task)
+
+        s.save()
+        return Response(TaskWriteSerializer(task).data)
+
+    # ── destroy ───────────────────────────────────────────────────────────────
+
+    def destroy(self, request, project_pk=None, pk=None):
+        """DELETE /api/projects/{id}/tasks/{pk}/ — teacher only, project must be DRAFT."""
+        project = self._get_project()
+        if project.status != Project.Status.DRAFT:
+            raise ValidationError("Tasks can only be deleted from DRAFT projects.")
+        if project.created_by != request.user:
+            raise ValidationError("You do not own this project.")
+        task = get_object_or_404(Task, pk=pk, project=project)
+        task.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # ── bulk weights ──────────────────────────────────────────────────────────
+
+    def bulk_weights(self, request, project_pk=None):
+        """PUT /api/projects/{id}/tasks/weights/ — atomically set multiple weights."""
+        project = self._get_project()
+        if project.created_by != request.user:
+            raise ValidationError("You do not own this project.")
+        s = BulkWeightSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        tasks = set_task_weights(project.id, s.validated_data["weights"])
+        return Response(TaskWriteSerializer(tasks, many=True).data)
+
+    # ── toggle completion ─────────────────────────────────────────────────────
+
+    def toggle_completion(self, request, project_pk=None, pk=None):
+        """POST /api/projects/{id}/tasks/{pk}/toggle/ — mark task complete/incomplete."""
+        project = self._get_project()
+        if project.status != Project.Status.IN_PROGRESS:
+            raise ValidationError("Task completion only allowed on IN_PROGRESS projects.")
+
+        task = get_object_or_404(Task, pk=pk, project=project)
+
+        if task.children.exists():
+            raise ValidationError("Only leaf tasks (no subtasks) can be marked complete.")
+
+        s = ToggleSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        task.is_completed = s.validated_data["is_completed"]
+        if task.is_completed:
+            task.completed_by = request.user
+            task.completed_at = timezone.now()
+        else:
+            task.completed_by = None
+            task.completed_at = None
+        task.save(update_fields=["is_completed", "completed_by", "completed_at"])
+        return Response(TaskWriteSerializer(task).data)

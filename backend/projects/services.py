@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from accounts.exceptions import StaleDataError
-from .models import Project, ProjectStatusLog
+from .models import Project, ProjectStatusLog, Task
 
 
 # ── private helpers ───────────────────────────────────────────────────────────
@@ -147,3 +147,54 @@ def force_transition(project_id, user, to_status, reason, version):
     project.save(update_fields=["status", "version", "updated_at"])
     _log(project, from_status, to_status, user, reason=reason, is_forced=True)
     return project
+
+
+# ── task helpers ──────────────────────────────────────────────────────────────
+
+def get_task_depth(task):
+    """
+    Return the 1-based depth of a task in its project's tree.
+    Root tasks (parent_task=None) are depth 1.  Walks up via DB queries;
+    at most MAX_DEPTH−1 extra queries (i.e. 2 extra at most).
+    """
+    depth = 1
+    current_id = task.parent_task_id
+    while current_id is not None:
+        depth += 1
+        current_id = (
+            Task.objects
+            .values_list("parent_task_id", flat=True)
+            .get(id=current_id)
+        )
+    return depth
+
+
+def validate_task_depth(parent_task):
+    """Raise ValidationError if adding a child to parent_task would exceed MAX_DEPTH."""
+    parent_depth = get_task_depth(parent_task)
+    if parent_depth >= Task.MAX_DEPTH:
+        raise ValidationError(
+            f"Maximum task depth ({Task.MAX_DEPTH}) exceeded."
+        )
+
+
+@transaction.atomic
+def set_task_weights(project_id, weight_items):
+    """
+    Bulk-update task weights atomically.
+    weight_items: list of {"id": int, "weight": Decimal}
+    All task IDs must belong to this project; raises ValidationError if any don't.
+    """
+    task_ids = [item["id"] for item in weight_items]
+    found = set(
+        Task.objects.filter(project_id=project_id, id__in=task_ids)
+        .values_list("id", flat=True)
+    )
+    missing = set(task_ids) - found
+    if missing:
+        raise ValidationError(
+            f"Task IDs {sorted(missing)} do not belong to this project."
+        )
+    for item in weight_items:
+        Task.objects.filter(id=item["id"]).update(weight=item["weight"])
+    return list(Task.objects.filter(project_id=project_id).order_by("order", "id"))

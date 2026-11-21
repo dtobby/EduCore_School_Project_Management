@@ -127,3 +127,40 @@ class ForceTransitionSerializer(serializers.Serializer):
     version = serializers.IntegerField(min_value=1)
     to_status = serializers.ChoiceField(choices=Project.Status.choices)
     reason = serializers.CharField(min_length=1)
+
+
+# ── task serializers ──────────────────────────────────────────────────────────
+
+class TaskWriteSerializer(serializers.ModelSerializer):
+    """
+    Used for create, update, retrieve, and toggle output.
+    Flat (no recursive children) — the tree is for list/project-detail only.
+    """
+    class Meta:
+        model = Task
+        fields = [
+            "id", "title", "weight", "due_date",
+            "parent_task", "order",
+            "is_completed", "completed_by", "completed_at",
+        ]
+        read_only_fields = ["is_completed", "completed_by", "completed_at"]
+
+
+class BulkWeightItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    weight = serializers.DecimalField(
+        max_digits=5, decimal_places=2,
+        min_value=Decimal("0.01"), max_value=Decimal("100.00"),
+    )
+
+
+class BulkWeightSerializer(serializers.Serializer):
+    """Input for PUT /api/projects/{id}/tasks/weights/"""
+    weights = serializers.ListField(
+        child=BulkWeightItemSerializer(), allow_empty=False,
+    )
+
+
+class ToggleSerializer(serializers.Serializer):
+    """Input for POST /api/projects/{id}/tasks/{pk}/toggle/"""
+    is_completed = serializers.BooleanField()
