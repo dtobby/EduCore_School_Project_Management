@@ -2,6 +2,7 @@ import django_filters
 from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
+from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
@@ -429,3 +430,52 @@ class ScheduleView(APIView):
                 "title": p.title,
             })
         return events
+
+
+# Admin stats
+
+class AdminStatsView(APIView):
+    """
+    GET /api/admin/stats/ — admin only.
+    Returns user counts by role, project counts by status, average grade,
+    and the number of overdue IN_PROGRESS projects.
+
+    3 DB queries total — always, regardless of how much data exists:
+      1. user counts by role
+      2. project counts by status
+      3. one aggregate: average grade (GRADED only) + overdue count (conditional)
+    """
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        now = timezone.now()
+
+        # Query 1 — user counts grouped by role
+        role_rows = User.objects.values("role").annotate(n=Count("id"))
+        users = {row["role"]: row["n"] for row in role_rows}
+        for role in ("ADMIN", "TEACHER", "STUDENT"):
+            users.setdefault(role, 0)
+
+        # Query 2 — project counts grouped by status
+        status_rows = Project.objects.values("status").annotate(n=Count("id"))
+        projects = {row["status"]: row["n"] for row in status_rows}
+        for s in Project.Status.values:
+            projects.setdefault(s, 0)
+
+        # Query 3 — single aggregate: avg grade + overdue count
+        # filter= inside Count/Avg is conditional aggregation (SQL CASE WHEN ... END).
+        # One query no matter how many rows exist.
+        agg = Project.objects.aggregate(
+            average_grade=Avg("grade", filter=Q(status=Project.Status.GRADED)),
+            overdue_projects=Count(
+                "id",
+                filter=Q(status=Project.Status.IN_PROGRESS, deadline__lt=now),
+            ),
+        )
+
+        return Response({
+            "users": users,
+            "projects": projects,
+            "average_grade": agg["average_grade"],
+            "overdue_projects": agg["overdue_projects"],
+        })
