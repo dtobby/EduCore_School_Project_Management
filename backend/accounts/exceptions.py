@@ -40,8 +40,6 @@ def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 
     if response is not None:
-        # exc.detail.code holds the per-instance code (e.g. "user_inactive")
-        # exc.default_code holds the class-level fallback (e.g. "authentication_failed")
         detail_obj = getattr(exc, "detail", None)
         code = getattr(detail_obj, "code", None) or getattr(exc, "default_code", "error")
 

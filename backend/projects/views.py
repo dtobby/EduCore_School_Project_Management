@@ -210,7 +210,7 @@ class TaskViewSet(viewsets.GenericViewSet):
             return [IsAuthenticated(), IsTeacher()]
         return [IsAuthenticated()]
 
-    # ── list (returns tree, not flat queryset) ────────────────────────────────
+    # ── list (returns tree, not flat queryset)
 
     def list(self, request, project_pk=None):
         """GET /api/projects/{id}/tasks/ — returns nested task tree."""
@@ -218,7 +218,7 @@ class TaskViewSet(viewsets.GenericViewSet):
         roots = get_task_tree(project.id)
         return Response(TaskSerializer(roots, many=True).data)
 
-    # ── create ────────────────────────────────────────────────────────────────
+    # ── create 
 
     def create(self, request, project_pk=None):
         """POST /api/projects/{id}/tasks/ — teacher only, project must be DRAFT."""
@@ -241,7 +241,7 @@ class TaskViewSet(viewsets.GenericViewSet):
         task = s.save(project=project)
         return Response(TaskWriteSerializer(task).data, status=status.HTTP_201_CREATED)
 
-    # ── retrieve ──────────────────────────────────────────────────────────────
+    # ── retrieve 
 
     def retrieve(self, request, project_pk=None, pk=None):
         """GET /api/projects/{id}/tasks/{pk}/ — flat task (no nested children)."""
@@ -249,8 +249,7 @@ class TaskViewSet(viewsets.GenericViewSet):
         task = get_object_or_404(Task, pk=pk, project__pk=project_pk)
         return Response(TaskWriteSerializer(task).data)
 
-    # ── partial_update ────────────────────────────────────────────────────────
-
+    # ── partial_update 
     def partial_update(self, request, project_pk=None, pk=None):
         """PATCH /api/projects/{id}/tasks/{pk}/ — teacher only, project must be DRAFT."""
         project = self._get_project()
@@ -274,7 +273,7 @@ class TaskViewSet(viewsets.GenericViewSet):
         s.save()
         return Response(TaskWriteSerializer(task).data)
 
-    # ── destroy ───────────────────────────────────────────────────────────────
+    # ── destroy 
 
     def destroy(self, request, project_pk=None, pk=None):
         """DELETE /api/projects/{id}/tasks/{pk}/ — teacher only, project must be DRAFT."""
@@ -287,7 +286,7 @@ class TaskViewSet(viewsets.GenericViewSet):
         task.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    # ── bulk weights ──────────────────────────────────────────────────────────
+    # ── bulk weights 
 
     def bulk_weights(self, request, project_pk=None):
         """PUT /api/projects/{id}/tasks/weights/ — atomically set multiple weights."""
@@ -299,7 +298,7 @@ class TaskViewSet(viewsets.GenericViewSet):
         tasks = set_task_weights(project.id, s.validated_data["weights"])
         return Response(TaskWriteSerializer(tasks, many=True).data)
 
-    # ── toggle completion ─────────────────────────────────────────────────────
+    # ── toggle completion 
 
     def toggle_completion(self, request, project_pk=None, pk=None):
         """POST /api/projects/{id}/tasks/{pk}/toggle/ — mark task complete/incomplete."""
@@ -316,7 +315,7 @@ class TaskViewSet(viewsets.GenericViewSet):
         return Response(TaskWriteSerializer(task).data)
 
 
-# ── Schedule ──────────────────────────────────────────────────────────────────
+# ── Schedule 
 
 class ScheduleView(APIView):
     """
@@ -454,8 +453,6 @@ class AdminStatsView(APIView):
             projects.setdefault(s, 0)
 
         # Query 3 — single aggregate: avg grade + overdue count
-        # filter= inside Count/Avg is conditional aggregation (SQL CASE WHEN ... END).
-        # One query no matter how many rows exist.
         agg = Project.objects.aggregate(
             average_grade=Avg("grade", filter=Q(status=Project.Status.GRADED)),
             overdue_projects=Count(

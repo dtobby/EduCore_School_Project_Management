@@ -27,7 +27,7 @@ def make_project(teacher, status=Project.Status.DRAFT, days=30):
     )
 
 
-# ── project list ──────────────────────────────────────────────────────────────
+# ── project list 
 
 @pytest.mark.django_db
 class TestProjectListQueryCount:
@@ -56,7 +56,7 @@ class TestProjectListQueryCount:
             client.get("/api/projects/", **auth(teacher_token))
 
 
-# ── project detail ────────────────────────────────────────────────────────────
+# ── project detail 
 
 @pytest.mark.django_db
 class TestProjectDetailQueryCount:
@@ -80,7 +80,7 @@ class TestProjectDetailQueryCount:
             client.get(url, **auth(teacher_token))
 
 
-# ── schedule ──────────────────────────────────────────────────────────────────
+# ── schedule 
 
 @pytest.mark.django_db
 class TestScheduleQueryCount:

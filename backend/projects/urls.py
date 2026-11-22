@@ -16,7 +16,8 @@ urlpatterns = [
     path("schedule/", ScheduleView.as_view(), name="schedule"),
     path("admin/stats/", AdminStatsView.as_view(), name="admin-stats"),
     path("projects/<int:project_pk>/tasks/", _task_list, name="project-task-list"),
-    # weights/ before <int:pk>/ so it matches first (though <int:pk> won't match the string "weights")
+
+ 
     path("projects/<int:project_pk>/tasks/weights/", _task_weights, name="project-task-weights"),
     path("projects/<int:project_pk>/tasks/<int:pk>/", _task_detail, name="project-task-detail"),
     path("projects/<int:project_pk>/tasks/<int:pk>/toggle/", _task_toggle, name="project-task-toggle"),

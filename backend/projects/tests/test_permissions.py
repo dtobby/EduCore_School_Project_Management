@@ -16,7 +16,7 @@ from projects.selectors import get_projects_for_user
 User = get_user_model()
 
 
-# ── fixtures ──────────────────────────────────────────────────────────────────
+# ── fixtures 
 
 @pytest.fixture
 def teacher2(db):
@@ -50,7 +50,7 @@ def project_by_teacher2(db, teacher2):
     )
 
 
-# ── admin sees everything ─────────────────────────────────────────────────────
+# ── admin sees everything 
 
 @pytest.mark.django_db
 class TestAdminScope:
@@ -74,7 +74,7 @@ class TestAdminScope:
         assert project_by_teacher2.id in project_ids
 
 
-# ── teacher sees only their own ───────────────────────────────────────────────
+# ── teacher sees only their own 
 
 @pytest.mark.django_db
 class TestTeacherScope:
@@ -103,7 +103,7 @@ class TestTeacherScope:
         assert qs.count() == 0
 
 
-# ── student sees only assigned ────────────────────────────────────────────────
+# student sees only assigned 
 
 @pytest.mark.django_db
 class TestStudentScope:

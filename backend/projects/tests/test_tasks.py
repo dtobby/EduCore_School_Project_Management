@@ -11,7 +11,7 @@ from projects.models import Project, Task
 
 User = get_user_model()
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── helpers 
 
 def make_project(teacher, status=Project.Status.DRAFT):
     return Project.objects.create(
@@ -42,7 +42,7 @@ WEIGHTS = "/api/projects/{project_id}/tasks/weights/"
 TOGGLE = "/api/projects/{project_id}/tasks/{task_id}/toggle/"
 
 
-# ── list ──────────────────────────────────────────────────────────────────────
+# ── list
 
 @pytest.mark.django_db
 class TestTaskList:
@@ -82,7 +82,7 @@ class TestTaskList:
         assert res.status_code == 404
 
 
-# ── create ────────────────────────────────────────────────────────────────────
+# ── create 
 
 @pytest.mark.django_db
 class TestTaskCreate:
@@ -130,7 +130,6 @@ class TestTaskCreate:
         l1 = make_task(project, "L1")
         l2 = make_task(project, "L2", parent=l1)
         l3 = make_task(project, "L3", parent=l2)
-        # Trying to add a child to l3 would be depth 4 — forbidden
         url = BASE.format(project_id=project.id)
         res = client.post(
             url,
@@ -167,7 +166,7 @@ class TestTaskCreate:
         assert res.status_code == 403
 
 
-# ── retrieve ──────────────────────────────────────────────────────────────────
+# ── retrieve 
 
 @pytest.mark.django_db
 class TestTaskRetrieve:
@@ -189,7 +188,7 @@ class TestTaskRetrieve:
         assert res.status_code == 404
 
 
-# ── update ────────────────────────────────────────────────────────────────────
+# ── update 
 
 @pytest.mark.django_db
 class TestTaskUpdate:
@@ -235,7 +234,7 @@ class TestTaskUpdate:
         assert res.status_code == 403
 
 
-# ── delete ────────────────────────────────────────────────────────────────────
+# ── delete 
 
 @pytest.mark.django_db
 class TestTaskDelete:
@@ -267,7 +266,7 @@ class TestTaskDelete:
         assert res.status_code == 400
 
 
-# ── bulk weights ──────────────────────────────────────────────────────────────
+# ── bulk weights 
 
 @pytest.mark.django_db
 class TestBulkWeights:
@@ -322,7 +321,7 @@ class TestBulkWeights:
         assert res.status_code == 403
 
 
-# ── toggle completion ─────────────────────────────────────────────────────────
+# ── toggle completion 
 
 @pytest.mark.django_db
 class TestToggleCompletion:

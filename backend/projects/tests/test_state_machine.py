@@ -424,7 +424,7 @@ class TestReturnForRevision:
         assert log.to_status == "IN_PROGRESS"
 
 
-# ── force transition ──────────────────────────────────────────────────────────
+# ── force transition 
 
 @pytest.mark.django_db
 class TestForceTransition:
@@ -483,7 +483,7 @@ class TestForceTransition:
         assert res.status_code == 400
 
 
-# ── full flow ─────────────────────────────────────────────────────────────────
+# ── full flow 
 
 @pytest.mark.django_db
 class TestFullFlow:
@@ -502,8 +502,7 @@ class TestFullFlow:
         )
         assert res.data["status"] == "IN_PROGRESS"
         assert res.data["version"] == 2
-
-        # Student completes the leaf task (FR-09 — required before submit)
+  
         task = Task.objects.filter(project=project).first()
         res = client.post(
             f"/api/projects/{project.id}/tasks/{task.id}/toggle/",
@@ -511,7 +510,7 @@ class TestFullFlow:
             content_type="application/json",
             **auth(student_token),
         )
-        assert res.status_code == 200  # toggle increments project.version to 3
+        assert res.status_code == 200  
 
         # Student submits
         res = client.post(

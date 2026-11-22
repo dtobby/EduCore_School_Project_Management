@@ -19,33 +19,33 @@ That's it. On first boot the container:
 1. Runs all migrations automatically
 2. Seeds demo data (users + projects in every status)
 
-| URL | What |
-|-----|------|
-| http://localhost:5173 | Vue frontend (login + project list) |
+| URL                             | What                                  |
+| ------------------------------- | ------------------------------------- |
+| http://localhost:5173           | Vue frontend (login + project list)   |
 | http://localhost:8000/api/docs/ | Interactive API explorer (Swagger UI) |
-| http://localhost:8000/admin/ | Django admin panel |
+| http://localhost:8000/admin/    | Django admin panel                    |
 
 ---
 
 ## Demo credentials
 
-| Username          | Password     | Role    |
-| ----------------- | ------------ | ------- |
-| `admin1`          | `admin123`   | ADMIN   |
-| `teacher1`        | `teacher123` | TEACHER |
-| `teacher2`        | `teacher123` | TEACHER |
-| `student1`        | `student123` | STUDENT |
-| `student2`        | `student123` | STUDENT |
+| Username              | Password     | Role    |
+| --------------------- | ------------ | ------- |
+| `admin1`              | `admin123`   | ADMIN   |
+| `teacher1`            | `teacher123` | TEACHER |
+| `teacher2`            | `teacher123` | TEACHER |
+| `student1`            | `student123` | STUDENT |
+| `student2`            | `student123` | STUDENT |
 | `student3`–`student6` | `student123` | STUDENT |
 
 ### Seeded projects
 
-| Title                     | Status         | Creator  | Assigned to                      |
-| ------------------------- | -------------- | -------- | -------------------------------- |
-| [DEMO] Science Fair       | DRAFT          | teacher1 | —                                |
+| Title                     | Status         | Creator  | Assigned to                            |
+| ------------------------- | -------------- | -------- | -------------------------------------- |
+| [DEMO] Science Fair       | DRAFT          | teacher1 | —                                      |
 | [DEMO] History Essay      | IN_PROGRESS    | teacher1 | student1, student2, student3, student4 |
-| [DEMO] Math Investigation | SUBMITTED      | teacher1 | student1, student2               |
-| [DEMO] Art Portfolio      | GRADED (88.50) | teacher2 | student2                         |
+| [DEMO] Math Investigation | SUBMITTED      | teacher1 | student1, student2                     |
+| [DEMO] Art Portfolio      | GRADED (88.50) | teacher2 | student2                               |
 
 Every project has a task tree at least 2 levels deep.
 
@@ -63,16 +63,16 @@ docker compose exec backend pytest projects/tests/test_state_machine.py -v
 
 ## API overview
 
-| Group         | Endpoints |
-| ------------- | --------- |
-| Auth          | `POST /api/auth/token/` · `POST /api/auth/token/refresh/` · `GET /api/auth/me/` |
-| Projects      | `GET/POST /api/projects/` · `GET/PATCH/DELETE /api/projects/{id}/` |
-| Assign        | `POST /api/projects/{id}/students/` · `DELETE /api/projects/{id}/students/{sid}/` |
-| State machine | `publish` · `submit` · `grade` · `return` · `force-transition` |
+| Group         | Endpoints                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| Auth          | `POST /api/auth/token/` · `POST /api/auth/token/refresh/` · `GET /api/auth/me/`           |
+| Projects      | `GET/POST /api/projects/` · `GET/PATCH/DELETE /api/projects/{id}/`                        |
+| Assign        | `POST /api/projects/{id}/students/` · `DELETE /api/projects/{id}/students/{sid}/`         |
+| State machine | `publish` · `submit` · `grade` · `return` · `force-transition`                            |
 | Tasks         | `GET/POST /api/projects/{id}/tasks/` · `GET/PATCH/DELETE /api/projects/{id}/tasks/{tid}/` |
-| Task actions  | `PUT /api/projects/{id}/tasks/weights/` · `POST /api/projects/{id}/tasks/{tid}/toggle/` |
-| Schedule      | `GET /api/schedule/?from=&to=` |
-| Admin stats   | `GET /api/admin/stats/` |
+| Task actions  | `PUT /api/projects/{id}/tasks/weights/` · `POST /api/projects/{id}/tasks/{tid}/toggle/`   |
+| Schedule      | `GET /api/schedule/?from=&to=`                                                            |
+| Admin stats   | `GET /api/admin/stats/`                                                                   |
 
 Full interactive docs at `/api/docs/`.
 
@@ -125,10 +125,10 @@ State machine transitions live in `projects/services.py` as plain Python functio
 
 ## Trade-offs and what was left out
 
-| Feature             | Why omitted |
-| ------------------- | ----------- |
-| File attachments    | Submission is a status transition, not a file upload. The SRS does not require attachments. Would add S3/R2 dependency and complexity. |
-| Email notifications | No SMTP or background task runner (Celery) in scope. The state machine logs every transition, which is the durable record. |
+| Feature             | Why omitted                                                                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File attachments    | Submission is a status transition, not a file upload. The SRS does not require attachments. Would add S3/R2 dependency and complexity.               |
+| Email notifications | No SMTP or background task runner (Celery) in scope. The state machine logs every transition, which is the durable record.                           |
 | Soft-delete         | Users are deactivated (`is_active=False`), not deleted. All FKs use `PROTECT` so accidental deletion raises an error rather than cascading silently. |
 
 ## What I would add with more time

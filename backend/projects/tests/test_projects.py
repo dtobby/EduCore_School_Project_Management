@@ -12,7 +12,7 @@ from projects.models import Project
 User = get_user_model()
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── helpers 
 
 def make_project(teacher, title="Test Project", days=30):
     return Project.objects.create(
@@ -26,7 +26,7 @@ def auth(client, token):
     return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
 
-# ── list tests ────────────────────────────────────────────────────────────────
+# ── list tests 
 
 @pytest.mark.django_db
 class TestProjectList:
@@ -90,7 +90,7 @@ class TestProjectList:
         assert "History Essay" not in titles
 
 
-# ── create tests ──────────────────────────────────────────────────────────────
+# ── create tests 
 
 @pytest.mark.django_db
 class TestProjectCreate:
@@ -136,7 +136,7 @@ class TestProjectCreate:
         assert res.data["status"] == "DRAFT"
 
 
-# ── retrieve tests ────────────────────────────────────────────────────────────
+# ── retrieve tests
 
 @pytest.mark.django_db
 class TestProjectRetrieve:
@@ -172,7 +172,7 @@ class TestProjectRetrieve:
         assert res.status_code == 404   # not 403
 
 
-# ── update tests ──────────────────────────────────────────────────────────────
+# ── update tests 
 
 @pytest.mark.django_db
 class TestProjectUpdate:
@@ -223,7 +223,7 @@ class TestProjectUpdate:
         assert res.status_code == 400
 
 
-# ── delete tests ──────────────────────────────────────────────────────────────
+# ── delete tests 
 
 @pytest.mark.django_db
 class TestProjectDelete:
@@ -241,7 +241,7 @@ class TestProjectDelete:
         assert res.status_code == 400
 
 
-# ── assign/unassign tests ─────────────────────────────────────────────────────
+# ── assign/unassign tests 
 
 @pytest.mark.django_db
 class TestAssignStudents:
@@ -279,7 +279,7 @@ class TestAssignStudents:
         assert res.status_code == 403
 
 
-# ── query count test ──────────────────────────────────────────────────────────
+# ── query count test 
 
 @pytest.mark.django_db
 class TestQueryCounts:

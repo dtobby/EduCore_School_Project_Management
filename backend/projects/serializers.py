@@ -34,7 +34,7 @@ class TaskSerializer(serializers.ModelSerializer):
         ]
 
     def get_children(self, obj):
-        # ._children is attached by get_task_tree() — already in memory
+      
         return TaskSerializer(obj._children, many=True).data
 
 
@@ -94,7 +94,7 @@ class AssignStudentsSerializer(serializers.Serializer):
     )
 
 
-# ── transition input serializers ──────────────────────────────────────────────
+# ── transition input serializers 
 
 class PublishSerializer(serializers.Serializer):
     """Input for POST /api/projects/{id}/publish/"""
@@ -129,7 +129,7 @@ class ForceTransitionSerializer(serializers.Serializer):
     reason = serializers.CharField(min_length=1)
 
 
-# ── task serializers ──────────────────────────────────────────────────────────
+# ── task serializers 
 
 class TaskWriteSerializer(serializers.ModelSerializer):
     """

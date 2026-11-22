@@ -37,7 +37,7 @@ class Command(BaseCommand):
         self.stdout.write("Seeding school data …")
         now = timezone.now()
 
-        # ── users ─────────────────────────────────────────────────────────────
+        # users 
         users = {}
         for spec in _USERS:
             user, created = User.objects.get_or_create(
@@ -62,7 +62,7 @@ class Command(BaseCommand):
         s3 = users["student3"]
         s4 = users["student4"]
 
-        # ── Project 1 — DRAFT ─────────────────────────────────────────────────
+        # Project 1 — DRAFT 
         p1, created = Project.objects.get_or_create(
             title="[DEMO] Science Fair",
             defaults={
@@ -81,7 +81,7 @@ class Command(BaseCommand):
             Task.objects.create(project=p1, title="Write proposal",      weight="50.00", order=2, parent_task=design)
             self.stdout.write(f"  + project {p1.title} [{p1.status}]")
 
-        # ── Project 2 — IN_PROGRESS ───────────────────────────────────────────
+        #  Project 2 — IN_PROGRESS 
         p2, created = Project.objects.get_or_create(
             title="[DEMO] History Essay",
             defaults={
@@ -103,7 +103,7 @@ class Command(BaseCommand):
             _log(p2, Project.Status.DRAFT, Project.Status.IN_PROGRESS, t1)
             self.stdout.write(f"  + project {p2.title} [{p2.status}]")
 
-        # ── Project 3 — SUBMITTED ─────────────────────────────────────────────
+        # Project 3 — SUBMITTED 
         p3, created = Project.objects.get_or_create(
             title="[DEMO] Math Investigation",
             defaults={
@@ -140,7 +140,7 @@ class Command(BaseCommand):
             _log(p3, Project.Status.IN_PROGRESS, Project.Status.SUBMITTED,   s1)
             self.stdout.write(f"  + project {p3.title} [{p3.status}]")
 
-        # ── Project 4 — GRADED ────────────────────────────────────────────────
+        #  Project 4 — GRADED 
         p4, created = Project.objects.get_or_create(
             title="[DEMO] Art Portfolio",
             defaults={

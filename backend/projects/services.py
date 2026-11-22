@@ -9,7 +9,7 @@ from .models import Project, ProjectStatusLog, Task
 from .selectors import get_task_tree
 
 
-# ── private helpers ───────────────────────────────────────────────────────────
+# ── private helpers 
 
 def _validate_sibling_weights(tasks, errors):
     """Each group of sibling tasks must sum to exactly 100.00."""
@@ -79,7 +79,7 @@ def _log(project, from_status, to_status, user, reason="", is_forced=False):
     )
 
 
-# ── public transitions ────────────────────────────────────────────────────────
+# ── public transitions 
 
 @transaction.atomic
 def publish_project(project_id, user, version):
@@ -106,7 +106,7 @@ def _check_all_leaves_complete(project_id):
     """Raise PreconditionError if any leaf task is not completed. FR-09."""
     roots = get_task_tree(project_id)
     if not roots:
-        return  # no tasks — handled by publish preconditions already
+        return  
 
     incomplete = []
 
@@ -214,7 +214,7 @@ def force_transition(project_id, user, to_status, reason, version):
     return project
 
 
-# ── task helpers ──────────────────────────────────────────────────────────────
+# ── task helpers 
 
 def get_task_depth(task):
     """

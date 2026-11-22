@@ -23,7 +23,7 @@ def make_project(teacher, **kwargs):
     return Project.objects.create(created_by=teacher, **defaults)
 
 
-# ── auth & permissions ────────────────────────────────────────────────────────
+# auth & permissions 
 
 class TestAdminStatsAuth:
     def test_admin_can_access(self, client, admin_token):
@@ -43,7 +43,7 @@ class TestAdminStatsAuth:
         assert resp.status_code == 401
 
 
-# ── response shape ────────────────────────────────────────────────────────────
+# response shape
 
 class TestAdminStatsShape:
     def test_response_has_required_keys(self, client, admin_token):
@@ -52,7 +52,6 @@ class TestAdminStatsShape:
         assert set(data.keys()) == {"users", "projects", "average_grade", "overdue_projects"}
 
     def test_all_user_roles_always_present(self, client, admin_token):
-        # Only admin_user exists in this test — TEACHER and STUDENT should still appear as 0
         resp = client.get(URL, HTTP_AUTHORIZATION=f"Bearer {admin_token}")
         assert set(resp.json()["users"].keys()) == {"ADMIN", "TEACHER", "STUDENT"}
 
@@ -61,7 +60,7 @@ class TestAdminStatsShape:
         assert set(resp.json()["projects"].keys()) == {"DRAFT", "IN_PROGRESS", "SUBMITTED", "GRADED"}
 
 
-# ── user counts ───────────────────────────────────────────────────────────────
+# user counts 
 
 class TestAdminStatsUserCounts:
     def test_counts_users_by_role(self, client, admin_user, admin_token, teacher_user, student_user):
@@ -80,8 +79,7 @@ class TestAdminStatsUserCounts:
         assert resp.json()["users"]["STUDENT"] == 3
 
 
-# ── project counts ────────────────────────────────────────────────────────────
-
+# project counts 
 class TestAdminStatsProjectCounts:
     def test_counts_projects_by_status(self, client, admin_token, teacher_user):
         make_project(teacher_user, title="Draft 1", status=Project.Status.DRAFT)
@@ -96,7 +94,7 @@ class TestAdminStatsProjectCounts:
         assert projects["GRADED"] == 0
 
 
-# ── average grade ─────────────────────────────────────────────────────────────
+# average grade 
 
 class TestAdminStatsAverageGrade:
     def test_average_grade_of_graded_projects(self, client, admin_token, teacher_user):
@@ -111,17 +109,14 @@ class TestAdminStatsAverageGrade:
         assert resp.json()["average_grade"] is None
 
 
-# ── overdue count ─────────────────────────────────────────────────────────────
+# overdue count 
 
 class TestAdminStatsOverdueCount:
     def test_counts_overdue_in_progress_projects(self, client, admin_token, teacher_user):
-        # Overdue: IN_PROGRESS past deadline
         make_project(teacher_user, title="Overdue", status=Project.Status.IN_PROGRESS,
                      deadline=timezone.now() - timedelta(days=2))
-        # Not overdue: IN_PROGRESS, future deadline
         make_project(teacher_user, title="On Time", status=Project.Status.IN_PROGRESS,
                      deadline=timezone.now() + timedelta(days=5))
-        # Not counted: SUBMITTED past deadline (already submitted, not "overdue in progress")
         make_project(teacher_user, title="Late Submit", status=Project.Status.SUBMITTED,
                      deadline=timezone.now() - timedelta(days=1))
 

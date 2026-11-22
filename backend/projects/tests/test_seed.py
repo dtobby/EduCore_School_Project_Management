@@ -134,7 +134,7 @@ class TestSeedTasks:
         assert p.tasks.filter(is_completed=False).count() == 0
 
 
-# ── audit log ──────────────────────────────────────────────────────────────────
+# ── audit log 
 
 @pytest.mark.django_db
 class TestSeedStatusLogs:
@@ -147,8 +147,7 @@ class TestSeedStatusLogs:
         assert p.status_logs.count() == 0
 
 
-# ── idempotency ────────────────────────────────────────────────────────────────
-
+# ── idempotency
 @pytest.mark.django_db
 class TestSeedIdempotency:
     def test_running_twice_does_not_duplicate_users(self, seeded_twice):
@@ -159,5 +158,4 @@ class TestSeedIdempotency:
 
     def test_running_twice_does_not_duplicate_tasks(self, seeded_twice):
         first_run_count = Task.objects.count()
-        # Count after two runs equals count after one run (fixture ran it twice)
         assert first_run_count == Task.objects.count()
